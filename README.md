@@ -23,6 +23,7 @@ This fork removes all tools that could send data outside your account:
 - **No email sending** - Claude can draft emails, but you must manually send them from Gmail
 - **No file sharing** - Claude cannot share files with external users
 - **No filter creation** - Claude cannot create auto-forwarding rules
+- **Secure credential storage** - OAuth tokens stored in macOS Keychain, not plaintext files
 
 See [SECURITY.md](./SECURITY.md) for the complete security model.
 
@@ -130,7 +131,7 @@ See [SECURITY.md](./SECURITY.md) for comprehensive security documentation.
 
 ## Support
 
-For issues with this project, please [file an issue](https://github.com/YOUR_ORG/hardened-google-workspace-mcp/issues) on GitHub.
+For issues with this project, please [file an issue](https://github.com/c0webster/hardened-google-workspace-mcp/issues) on GitHub.
 
 ---
 

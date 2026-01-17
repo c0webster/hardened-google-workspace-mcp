@@ -201,7 +201,7 @@ rm -rf ~/.credentials/workspace-mcp/
 Then restart Claude Code and re-authorize.
 
 ### Need help?
-File an issue on the [GitHub repository](https://github.com/YOUR_ORG/hardened-google-workspace-mcp/issues).
+File an issue on the [GitHub repository](https://github.com/c0webster/hardened-google-workspace-mcp/issues).
 
 ---
 

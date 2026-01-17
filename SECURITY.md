@@ -134,6 +134,6 @@ This will immediately invalidate all tokens and prevent any further access.
 
 ## Reporting Security Issues
 
-For security issues with this project, please [file an issue](https://github.com/YOUR_ORG/hardened-google-workspace-mcp/issues) on GitHub.
+For security issues with this project, please [file an issue](https://github.com/c0webster/hardened-google-workspace-mcp/issues) on GitHub.
 
 For issues with the upstream google_workspace_mcp project, see the [upstream repository](https://github.com/taylorwilsdon/google_workspace_mcp).
