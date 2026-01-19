@@ -90,7 +90,7 @@ def main():
         action="store_true",
         help="Run in single-user mode - bypass session mapping and use any credentials from the credentials directory",
     )
-    # CG-MODIFIED: Restricted to only approved services for security
+    # CW-MODIFIED: Restricted to only approved services for security
     # Removed: chat, tasks, search to reduce attack surface
     parser.add_argument(
         "--tools",
@@ -171,7 +171,7 @@ def main():
         safe_print(f"   - {key}: {value}")
     safe_print("")
 
-    # CG-MODIFIED: Only approved services for security
+    # CW-MODIFIED: Only approved services for security
     # Removed: chat, tasks, search to reduce attack surface
     tool_imports = {
         "gmail": lambda: import_module("gmail.gmail_tools"),

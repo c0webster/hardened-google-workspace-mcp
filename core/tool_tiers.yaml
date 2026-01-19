@@ -1,9 +1,12 @@
+# Tool tier definitions for hardened Google Workspace MCP
+# CW-MODIFIED: Removed security-blocked tools and disabled services
+
 gmail:
   core:
     - search_gmail_messages
     - get_gmail_message_content
     - get_gmail_messages_content_batch
-    - send_gmail_message
+    # send_gmail_message - REMOVED FOR SECURITY (exfiltration vector)
 
   extended:
     - get_gmail_attachment_content
@@ -12,6 +15,7 @@ gmail:
     - list_gmail_labels
     - manage_gmail_label
     - draft_gmail_message
+    - list_gmail_filters
 
   complete:
     - get_gmail_threads_content_batch
@@ -24,15 +28,17 @@ drive:
     - get_drive_file_content
     - get_drive_file_download_url
     - create_drive_file
-    - share_drive_file
     - get_drive_shareable_link
+    # share_drive_file - REMOVED FOR SECURITY (exfiltration vector)
+
   extended:
     - list_drive_items
     - update_drive_file
-    - update_drive_permission
-    - remove_drive_permission
-    - transfer_drive_ownership
-    - batch_share_drive_file
+    # update_drive_permission - REMOVED FOR SECURITY
+    # remove_drive_permission - REMOVED FOR SECURITY
+    # transfer_drive_ownership - REMOVED FOR SECURITY
+    # batch_share_drive_file - REMOVED FOR SECURITY
+
   complete:
     - get_drive_file_permissions
     - check_drive_file_public_access
@@ -78,6 +84,10 @@ sheets:
   extended:
     - list_spreadsheets
     - get_spreadsheet_info
+    - format_sheet_range
+    - add_conditional_formatting
+    - update_conditional_formatting
+    - delete_conditional_formatting
   complete:
     - create_sheet
     - read_spreadsheet_comments
@@ -85,14 +95,9 @@ sheets:
     - reply_to_spreadsheet_comment
     - resolve_spreadsheet_comment
 
-chat:
-  core:
-    - send_message
-    - get_messages
-    - search_messages
-  extended:
-    - list_spaces
-  complete: []
+# chat: REMOVED FOR SECURITY - service disabled entirely
+# tasks: REMOVED FOR SECURITY - service disabled entirely
+# search: REMOVED FOR SECURITY - service disabled entirely
 
 forms:
   core:
@@ -117,28 +122,3 @@ slides:
     - create_presentation_comment
     - reply_to_presentation_comment
     - resolve_presentation_comment
-
-tasks:
-  core:
-    - get_task
-    - list_tasks
-    - create_task
-    - update_task
-  extended:
-    - delete_task
-  complete:
-    - list_task_lists
-    - get_task_list
-    - create_task_list
-    - update_task_list
-    - delete_task_list
-    - move_task
-    - clear_completed_tasks
-
-search:
-  core:
-    - search_custom
-  extended:
-    - search_custom_siterestrict
-  complete:
-    - get_search_engine_info

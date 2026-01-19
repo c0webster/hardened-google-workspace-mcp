@@ -492,7 +492,7 @@ async def create_drive_file(
 
         # Check if this is a file:// URL
         parsed_url = urlparse(fileUrl)
-        # CG-MODIFIED: file:// URLs disabled to prevent arbitrary local file read
+        # CW-MODIFIED: file:// URLs disabled to prevent arbitrary local file read
         # via prompt injection attacks. Users can upload files via Google Drive UI.
         if parsed_url.scheme == "file":
             raise Exception(

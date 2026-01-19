@@ -217,7 +217,7 @@ class KeychainCredentialStore(CredentialStore):
     """
     Credential store using macOS Keychain via the keyring library.
 
-    CG-MODIFIED: Added for secure credential storage instead of plaintext JSON files.
+    CW-MODIFIED: Added for secure credential storage instead of plaintext JSON files.
     Credentials are stored in the system Keychain, protected by macOS security.
     """
 
@@ -365,7 +365,7 @@ def get_credential_store() -> CredentialStore:
     """
     Get the global credential store instance.
 
-    CG-MODIFIED: macOS-only with Keychain storage for security.
+    CW-MODIFIED: macOS-only with Keychain storage for security.
 
     Returns:
         Configured credential store instance

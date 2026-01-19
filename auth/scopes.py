@@ -74,7 +74,7 @@ CALENDAR_SCOPES = [CALENDAR_SCOPE, CALENDAR_READONLY_SCOPE, CALENDAR_EVENTS_SCOP
 
 DRIVE_SCOPES = [DRIVE_SCOPE, DRIVE_READONLY_SCOPE, DRIVE_FILE_SCOPE]
 
-# CG-MODIFIED: Removed GMAIL_SEND_SCOPE and GMAIL_SETTINGS_BASIC_SCOPE for security
+# CW-MODIFIED: Removed GMAIL_SEND_SCOPE and GMAIL_SETTINGS_BASIC_SCOPE for security
 # - GMAIL_SEND_SCOPE removed because send_gmail_message was removed (exfiltration risk)
 # - GMAIL_SETTINGS_BASIC_SCOPE removed because filter tools were removed (could auto-forward)
 GMAIL_SCOPES = [
@@ -100,7 +100,7 @@ TASKS_SCOPES = [TASKS_SCOPE, TASKS_READONLY_SCOPE]
 
 CUSTOM_SEARCH_SCOPES = [CUSTOM_SEARCH_SCOPE]
 
-# CG-MODIFIED: Only approved services for security
+# CW-MODIFIED: Only approved services for security
 # Removed: chat, tasks, search to reduce attack surface
 TOOL_SCOPES_MAP = {
     "gmail": GMAIL_SCOPES,
