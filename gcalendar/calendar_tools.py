@@ -534,6 +534,13 @@ async def get_events(
     return text_output
 
 
+# =============================================================================
+# CW-MODIFIED: attendees parameter removed to prevent email exfiltration
+# When attendees are added to calendar events, Google automatically sends email
+# invitations containing event details. This could be exploited via prompt injection
+# to exfiltrate data by adding attacker@external.com and putting sensitive info in
+# the event description. Users must add attendees manually in Google Calendar UI.
+# =============================================================================
 @server.tool()
 @handle_http_errors("create_event", service_type="calendar")
 @require_google_service("calendar", "calendar_events")
@@ -546,7 +553,6 @@ async def create_event(
     calendar_id: str = "primary",
     description: Optional[str] = None,
     location: Optional[str] = None,
-    attendees: Optional[List[str]] = None,
     timezone: Optional[str] = None,
     attachments: Optional[List[str]] = None,
     add_google_meet: bool = False,
@@ -566,7 +572,6 @@ async def create_event(
         calendar_id (str): Calendar ID (default: 'primary').
         description (Optional[str]): Event description.
         location (Optional[str]): Event location.
-        attendees (Optional[List[str]]): Attendee email addresses.
         timezone (Optional[str]): Timezone (e.g., "America/New_York").
         attachments (Optional[List[str]]): List of Google Drive file URLs or IDs to attach to the event.
         add_google_meet (bool): Whether to add a Google Meet video conference to the event. Defaults to False.
@@ -604,8 +609,6 @@ async def create_event(
             event_body["start"]["timeZone"] = timezone
         if "dateTime" in event_body["end"]:
             event_body["end"]["timeZone"] = timezone
-    if attendees:
-        event_body["attendees"] = [{"email": email} for email in attendees]
 
     # Handle reminders
     if reminders is not None or not use_default_reminders:
@@ -745,35 +748,13 @@ async def create_event(
     return confirmation_message
 
 
-def _normalize_attendees(
-    attendees: Optional[Union[List[str], List[Dict[str, Any]]]],
-) -> Optional[List[Dict[str, Any]]]:
-    """
-    Normalize attendees input to list of attendee objects.
-
-    Accepts either:
-    - List of email strings: ["user@example.com", "other@example.com"]
-    - List of attendee objects: [{"email": "user@example.com", "responseStatus": "accepted"}]
-    - Mixed list of both formats
-
-    Returns list of attendee dicts with at minimum 'email' key.
-    """
-    if attendees is None:
-        return None
-
-    normalized = []
-    for att in attendees:
-        if isinstance(att, str):
-            normalized.append({"email": att})
-        elif isinstance(att, dict) and "email" in att:
-            normalized.append(att)
-        else:
-            logger.warning(
-                f"[_normalize_attendees] Invalid attendee format: {att}, skipping"
-            )
-    return normalized if normalized else None
-
-
+# =============================================================================
+# CW-MODIFIED: attendees parameter removed to prevent email exfiltration
+# When attendees are added to calendar events, Google automatically sends email
+# invitations containing event details. This could be exploited via prompt injection
+# to exfiltrate data by adding attacker@external.com and putting sensitive info in
+# the event description. Users must add attendees manually in Google Calendar UI.
+# =============================================================================
 @server.tool()
 @handle_http_errors("modify_event", service_type="calendar")
 @require_google_service("calendar", "calendar_events")
@@ -787,7 +768,6 @@ async def modify_event(
     end_time: Optional[str] = None,
     description: Optional[str] = None,
     location: Optional[str] = None,
-    attendees: Optional[Union[List[str], List[Dict[str, Any]]]] = None,
     timezone: Optional[str] = None,
     add_google_meet: Optional[bool] = None,
     reminders: Optional[Union[str, List[Dict[str, Any]]]] = None,
@@ -808,7 +788,6 @@ async def modify_event(
         end_time (Optional[str]): New end time (RFC3339, e.g., "2023-10-27T11:00:00-07:00" or "2023-10-28" for all-day).
         description (Optional[str]): New event description.
         location (Optional[str]): New event location.
-        attendees (Optional[Union[List[str], List[Dict[str, Any]]]]): Attendees as email strings or objects with metadata. Supports: ["email@example.com"] or [{"email": "email@example.com", "responseStatus": "accepted", "organizer": true, "optional": true}]. When using objects, existing metadata (responseStatus, organizer, optional) is preserved. New attendees default to responseStatus="needsAction".
         timezone (Optional[str]): New timezone (e.g., "America/New_York").
         add_google_meet (Optional[bool]): Whether to add or remove Google Meet video conference. If True, adds Google Meet; if False, removes it; if None, leaves unchanged.
         reminders (Optional[Union[str, List[Dict[str, Any]]]]): JSON string or list of reminder objects to replace existing reminders. Each should have 'method' ("popup" or "email") and 'minutes' (0-40320). Max 5 reminders. Example: '[{"method": "popup", "minutes": 15}]' or [{"method": "popup", "minutes": 15}]
@@ -844,11 +823,6 @@ async def modify_event(
         event_body["description"] = description
     if location is not None:
         event_body["location"] = location
-
-    # Normalize attendees - accepts both email strings and full attendee objects
-    normalized_attendees = _normalize_attendees(attendees)
-    if normalized_attendees is not None:
-        event_body["attendees"] = normalized_attendees
 
     if color_id is not None:
         event_body["colorId"] = color_id
@@ -942,8 +916,6 @@ async def modify_event(
                 "summary": summary,
                 "description": description,
                 "location": location,
-                # Use the already-normalized attendee objects (if provided); otherwise preserve existing
-                "attendees": event_body.get("attendees"),
                 "colorId": event_body.get("colorId"),
             },
         )

@@ -63,8 +63,9 @@ The following tools have been **removed** from this fork:
 #### Google Sheets - Allowed (all operations)
 - Read and write spreadsheet data
 
-#### Google Calendar - Allowed (all operations)
+#### Google Calendar - Allowed (limited)
 - List, read, create, update, delete calendar events
+- **Cannot add attendees** - Event attendees trigger automatic email invitations from Google, creating an exfiltration vector. Users must add attendees manually in Calendar UI.
 
 #### Google Forms - Allowed (all operations)
 - Read form structure and responses

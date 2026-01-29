@@ -11,7 +11,7 @@ Enables Claude Code to interact with your Google Workspace:
 - **Google Drive**: Read/create files (cannot share externally)
 - **Google Docs**: Read and edit documents
 - **Google Sheets**: Read and write spreadsheets
-- **Google Calendar**: View and create events
+- **Google Calendar**: View and create events (cannot add attendees)
 - **Google Forms**: Read and create forms
 - **Google Slides**: Read and edit presentations
 
@@ -23,6 +23,7 @@ This fork removes all tools that could send data outside your account:
 - **No email sending** - Claude can draft emails, but you must manually send them from Gmail
 - **No file sharing** - Claude cannot share files with external users
 - **No filter creation** - Claude cannot create auto-forwarding rules
+- **No event attendees** - Claude cannot add attendees to calendar events (invitations could exfiltrate data)
 - **Secure credential storage** - OAuth tokens stored in macOS Keychain, not plaintext files
 
 See [SECURITY.md](./SECURITY.md) for the complete security model.

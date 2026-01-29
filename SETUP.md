@@ -210,12 +210,13 @@ File an issue on the [GitHub repository](https://github.com/c0webster/hardened-g
 **Claude CAN:**
 - Read your emails and create drafts
 - Read and edit Google Docs, Sheets, and Slides
-- View and create calendar events
+- View and create calendar events (cannot add attendees - must be done manually in Calendar UI)
 - Search and read files in your Drive
 
 **Claude CANNOT:**
 - Send emails (you must open Gmail and click Send yourself)
 - Share files with external users
+- Add attendees to calendar events (you must add them in Google Calendar UI)
 - Delete your files or emails permanently
 
 This is intentional for security. See SECURITY.md for details.
