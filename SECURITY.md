@@ -74,6 +74,49 @@ The following tools have been **removed** from this fork:
 #### Google Slides - Allowed (all operations)
 - Read and edit presentations
 
+## Remaining Risks
+
+While this fork removes the most obvious exfiltration vectors, **data leakage is still possible** through the following mechanisms:
+
+### 1. Creating Documents in Shared Folders
+If Claude creates a document in a folder that is already shared with an external party (including an attacker), that party will immediately gain access to the new document. The server cannot prevent this because:
+- Claude can create documents in any folder the user has access to
+- The server has no visibility into which folders are shared externally
+- Google Drive's permission model automatically grants folder permissions to new files
+
+**Mitigation**: Users should carefully review any prompts that involve creating documents, especially if the destination folder is not explicitly verified.
+
+### 2. Editing Attacker-Controlled Documents
+If an attacker shares a Google Doc with the user (or tricks the user into opening one), Claude could write sensitive information directly into that document, which the attacker can immediately see. This attack vector cannot be blocked because:
+- The server cannot distinguish between "user's own document" and "shared document from attacker"
+- Normal legitimate use cases involve editing shared documents
+- Revoking write access to all shared documents would break core functionality
+
+**Mitigation**: Users should be suspicious if Claude attempts to edit documents they don't recognize, especially if those documents were recently shared with them from external sources.
+
+### 3. Jailbroken Claude with Direct API Access
+If Claude is successfully jailbroken through prompt injection, it could potentially write Python/JavaScript code that directly calls the Google Workspace APIs using the user's authenticated credentials. While the MCP server restricts which *tools* are available, Claude still has:
+- The ability to write and potentially execute code (via other tools or mechanisms)
+- Access to the same OAuth credentials the MCP server uses
+- Knowledge of the Google Workspace API structure
+
+**Mitigation**: This is the hardest risk to mitigate and relies on:
+- Claude Code's permission system (never run with `--dangerously-skip-permissions`)
+- Claude's base model training to resist jailbreaks
+- User vigilance when reviewing tool calls that involve code execution
+- Limiting Claude Code's access to code execution tools in high-risk contexts
+
+### Defense-in-Depth Recommendations
+
+Given these residual risks:
+
+1. **Enable permission prompts** - Never disable Claude Code's permission system
+2. **Review document operations carefully** - Pay special attention when Claude creates or edits documents, especially in shared locations
+3. **Audit shared folders** - Periodically review which folders have external sharing enabled
+4. **Monitor recent activity** - Check Google Drive's "Recent" view and Gmail's "Sent" folder after Claude sessions
+5. **Use dedicated accounts for sensitive work** - Consider using separate Google accounts for highly sensitive data that Claude shouldn't access
+6. **Treat all external content as untrusted** - Documents, emails, or websites from external sources could contain prompt injections
+
 ## OAuth Scopes
 
 This server requests only the minimum scopes needed:

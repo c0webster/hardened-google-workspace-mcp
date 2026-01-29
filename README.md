@@ -128,7 +128,21 @@ If the browser doesn't open automatically, check the Claude Code output for a UR
 - **No external sharing** - Claude cannot share files outside your organization
 - **Report issues** - If Claude behaves unexpectedly, file an issue
 
-See [SECURITY.md](./SECURITY.md) for comprehensive security documentation.
+### ⚠️ Remaining Risks
+
+While this fork removes obvious exfiltration vectors, **data leakage is still possible**:
+
+1. **Shared folder creation** - Creating documents in folders already shared with external parties
+2. **Attacker-owned documents** - Editing documents that an attacker has shared with you
+3. **Jailbreak with API access** - A jailbroken Claude could potentially write code to directly call Google APIs
+
+**Best practices:**
+- Review document creation/editing operations carefully
+- Be suspicious of recently shared external documents
+- Monitor your Google Drive activity after Claude sessions
+- Consider using a dedicated Google account for sensitive work
+
+See [SECURITY.md](./SECURITY.md) for comprehensive security documentation and mitigation strategies.
 
 ## Support
 
