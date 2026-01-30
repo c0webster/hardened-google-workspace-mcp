@@ -166,17 +166,21 @@ https://www.googleapis.com/auth/calendar.events
 - `gmail.send` - Cannot send emails
 - `gmail.settings.basic` - Cannot modify Gmail settings/filters
 
-## Token Storage (Stateless Mode)
+## Token Storage
 
-This server runs in **stateless mode** by default (`WORKSPACE_MCP_STATELESS_MODE=true`). This means:
+By default, this server stores OAuth tokens in **macOS Keychain** for persistent, secure storage:
+
+- Tokens are stored in the system Keychain, protected by macOS security
+- Users authenticate once and remain authenticated across sessions
+- No plaintext JSON files are created
+
+**Optional stateless mode:** Set `WORKSPACE_MCP_STATELESS_MODE=true` and `MCP_ENABLE_OAUTH21=true` to store tokens in memory only:
 
 - OAuth tokens are stored **in memory only**, not written to disk
-- No credential files are created in `~/.google_workspace_mcp/credentials/`
-- Users must re-authenticate when Claude Desktop restarts
+- Users must re-authenticate when the server restarts
+- Eliminates persistent credential storage entirely
 
-**Why this matters:** Without stateless mode, a refresh token would be stored in a plaintext JSON file. An attacker who compromises a user's machine could copy this file and use it from any other machine to access that user's Google Workspace data. Stateless mode eliminates this attack vector.
-
-**Trade-off:** Users authenticate more frequently (on each Claude Desktop restart), but no persistent credential file exists to steal.
+**Security trade-off:** macOS Keychain provides good protection (requires system password to access), but stateless mode eliminates the credential storage attack surface entirely at the cost of more frequent re-authentication.
 
 ## Kill Switch
 
