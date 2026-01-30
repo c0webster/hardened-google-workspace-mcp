@@ -26,7 +26,17 @@ This fork removes all tools that could send data outside your account:
 - **No event attendees** - Claude cannot add attendees to calendar events (invitations could exfiltrate data)
 - **Secure credential storage** - OAuth tokens stored in macOS Keychain, not plaintext files
 
-See [SECURITY.md](./SECURITY.md) for the complete security model.
+### ⚠️ This Reduces Risk, It Does NOT Eliminate It
+
+**Important:** This hardening **only** affects the Google Workspace tools. Claude Code has access to many other tools that could be used for data exfiltration (web requests, file writes, code execution, other MCP servers).
+
+**You must stay vigilant:**
+- Always review tool calls before approving them
+- Never disable permission prompts
+- Be suspicious of unexpected web requests or file operations
+- Monitor Claude's behavior when processing external content
+
+See [SECURITY.md](./SECURITY.md) for the complete security model and additional risks.
 
 ## Prerequisites
 

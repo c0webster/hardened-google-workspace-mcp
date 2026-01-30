@@ -2,6 +2,24 @@
 
 This is a **security-hardened fork** of the google_workspace_mcp server, designed for use with Claude Code.
 
+## ⚠️ Important Security Notice
+
+**This server reduces but does NOT eliminate data exfiltration risk.**
+
+While we've removed dangerous Google Workspace operations, Claude Code has access to many other tools that could be used for data exfiltration:
+- **Web requests** - Claude can make HTTP requests to external servers
+- **File operations** - Claude can write files that may sync to cloud storage (Dropbox, iCloud, etc.)
+- **Other MCP servers** - Other installed MCP tools may have exfiltration capabilities
+- **Code execution** - Claude can write and execute code that calls external APIs
+
+**You must remain vigilant:**
+- Always review Claude's tool calls before approving them
+- Never run Claude Code with `--dangerously-skip-permissions`
+- Be suspicious of unexpected file writes, web requests, or code execution
+- Treat all content from external sources as potentially malicious (prompt injection risk)
+
+This hardening **only** secures the Google Workspace integration. Your overall security depends on the full set of tools Claude has access to.
+
 ## Security Model
 
 This server is designed with the assumption that **prompt injection attacks are possible**. An attacker could potentially inject malicious instructions into documents, emails, or other content that Claude processes. To mitigate data exfiltration risks, we have removed all tools that could be used to send data outside your account.
@@ -111,11 +129,14 @@ If Claude is successfully jailbroken through prompt injection, it could potentia
 Given these residual risks:
 
 1. **Enable permission prompts** - Never disable Claude Code's permission system
-2. **Review document operations carefully** - Pay special attention when Claude creates or edits documents, especially in shared locations
-3. **Audit shared folders** - Periodically review which folders have external sharing enabled
-4. **Monitor recent activity** - Check Google Drive's "Recent" view and Gmail's "Sent" folder after Claude sessions
-5. **Use dedicated accounts for sensitive work** - Consider using separate Google accounts for highly sensitive data that Claude shouldn't access
-6. **Treat all external content as untrusted** - Documents, emails, or websites from external sources could contain prompt injections
+2. **Review ALL tool usage, not just Google Workspace** - Watch for web requests, file writes, code execution, and other MCP tools
+3. **Review document operations carefully** - Pay special attention when Claude creates or edits documents, especially in shared locations
+4. **Audit shared folders** - Periodically review which folders have external sharing enabled
+5. **Monitor recent activity** - Check Google Drive's "Recent" view and Gmail's "Sent" folder after Claude sessions
+6. **Limit Claude's tool access** - Consider disabling other MCP servers or tools when working with sensitive data
+7. **Use dedicated accounts for sensitive work** - Consider using separate Google accounts for highly sensitive data that Claude shouldn't access
+8. **Treat all external content as untrusted** - Documents, emails, or websites from external sources could contain prompt injections
+9. **Review Claude Code's logs** - Periodically check what tools Claude has been using and what data it accessed
 
 ## OAuth Scopes
 
@@ -171,10 +192,19 @@ This will immediately invalidate all tokens and prevent any further access.
 ## User Security Guidelines
 
 1. **Keep permission prompts ON** - Never run Claude Code with `--dangerously-skip-permissions`
-2. **Review tool calls** - Pay attention when Claude asks to use Google Workspace tools
-3. **Be suspicious of unexpected requests** - If Claude suddenly wants to read many files or create drafts, review the context
-4. **Report strange behavior** - If Claude acts unexpectedly, investigate immediately
-5. **Don't paste untrusted content** - Content from external sources could contain prompt injections
+2. **Review ALL tool calls, not just Google Workspace** - Watch for:
+   - Unexpected web requests (WebFetch, curl, HTTP libraries)
+   - File write operations that could sync to cloud storage
+   - Code execution (especially Python/JavaScript that makes network calls)
+   - Use of other MCP servers you have installed
+3. **Be suspicious of unexpected requests** - If Claude suddenly wants to read many files, create drafts, or make web requests, review the context carefully
+4. **Watch Claude's behavior with external content** - Be extra vigilant when Claude processes:
+   - Emails from external senders
+   - Documents shared by people outside your organization
+   - Web pages or content from untrusted sources
+5. **Report strange behavior** - If Claude acts unexpectedly, investigate immediately
+6. **Don't paste untrusted content** - Content from external sources could contain prompt injections
+7. **Review your other MCP servers** - Audit what other tools Claude has access to beyond Google Workspace
 
 ## Reporting Security Issues
 
