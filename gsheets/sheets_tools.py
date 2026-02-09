@@ -8,7 +8,7 @@ import logging
 import asyncio
 import json
 import copy
-from typing import List, Optional, Union
+from typing import List, Literal, Optional, Union
 
 from auth.service_decorator import require_google_service
 from core.server import server
@@ -174,6 +174,9 @@ async def read_sheet_values(
     user_google_email: str,
     spreadsheet_id: str,
     range_name: str = "A1:Z1000",
+    value_render_option: Literal[
+        "FORMATTED_VALUE", "UNFORMATTED_VALUE", "FORMULA"
+    ] = "FORMATTED_VALUE",
 ) -> str:
     """
     Reads values from a specific range in a Google Sheet.
@@ -182,18 +185,26 @@ async def read_sheet_values(
         user_google_email (str): The user's Google email address. Required.
         spreadsheet_id (str): The ID of the spreadsheet. Required.
         range_name (str): The range to read (e.g., "Sheet1!A1:D10", "A1:D10"). Defaults to "A1:Z1000".
+        value_render_option (str): How values should be rendered in the output.
+            "FORMATTED_VALUE" (default) - display values (e.g., "1,450", "$2.50").
+            "UNFORMATTED_VALUE" - raw numbers without formatting (e.g., 1450, 2.5).
+            "FORMULA" - the underlying formulas (e.g., "=C7*C9 - C8*C9").
 
     Returns:
         str: The formatted values from the specified range.
     """
     logger.info(
-        f"[read_sheet_values] Invoked. Email: '{user_google_email}', Spreadsheet: {spreadsheet_id}, Range: {range_name}"
+        f"[read_sheet_values] Invoked. Email: '{user_google_email}', Spreadsheet: {spreadsheet_id}, Range: {range_name}, ValueRenderOption: {value_render_option}"
     )
 
     result = await asyncio.to_thread(
         service.spreadsheets()
         .values()
-        .get(spreadsheetId=spreadsheet_id, range=range_name)
+        .get(
+            spreadsheetId=spreadsheet_id,
+            range=range_name,
+            valueRenderOption=value_render_option,
+        )
         .execute
     )
 
