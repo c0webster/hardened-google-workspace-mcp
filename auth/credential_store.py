@@ -374,7 +374,7 @@ def get_credential_store() -> CredentialStore:
     global _credential_store
 
     if _credential_store is None:
-        _credential_store = KeyringCredentialStore()
+        _credential_store = LocalDirectoryCredentialStore()
         logger.info(f"Initialized credential store: {type(_credential_store).__name__}")
 
     return _credential_store
