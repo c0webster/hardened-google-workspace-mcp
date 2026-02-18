@@ -24,7 +24,7 @@ This fork removes all tools that could send data outside your account:
 - **No file sharing** - Claude cannot share files with external users
 - **No filter creation** - Claude cannot create auto-forwarding rules
 - **No event attendees** - Claude cannot add attendees to calendar events (invitations could exfiltrate data)
-- **Secure credential storage** - OAuth tokens stored in macOS Keychain, not plaintext files
+- **Secure credential storage** - OAuth tokens stored in system keyring (macOS Keychain, Windows Credential Manager, Linux SecretService), not plaintext files
 
 ### ⚠️ This Reduces Risk, It Does NOT Eliminate It
 

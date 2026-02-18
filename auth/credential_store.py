@@ -2,13 +2,13 @@
 Credential Store API for Google Workspace MCP
 
 This module provides a standardized interface for credential storage and retrieval.
-On macOS (the only supported platform), credentials are stored in the system Keychain.
+Credentials are stored in the system keyring (macOS Keychain, Windows Credential Manager,
+or Linux SecretService) via the `keyring` package.
 """
 
 import json
 import logging
 import os
-import platform
 from abc import ABC, abstractmethod
 from typing import Optional, List
 from datetime import datetime
@@ -213,58 +213,59 @@ class LocalDirectoryCredentialStore(CredentialStore):
         return sorted(users)
 
 
-class KeychainCredentialStore(CredentialStore):
+class KeyringCredentialStore(CredentialStore):
     """
-    Credential store using macOS Keychain via the keyring library.
+    Cross-platform credential store using the keyring library.
 
     CW-MODIFIED: Added for secure credential storage instead of plaintext JSON files.
-    Credentials are stored in the system Keychain, protected by macOS security.
+    Credentials are stored in the system keyring (macOS Keychain, Windows Credential
+    Manager, or Linux SecretService).
     """
 
     SERVICE_NAME = "hardened-google-workspace-mcp"
     _USERS_KEY = "__registered_users__"
 
     def __init__(self):
-        """Initialize the Keychain credential store."""
+        """Initialize the keyring credential store."""
         try:
             import keyring
 
             self._keyring = keyring
         except ImportError as e:
             raise RuntimeError(
-                "keyring package is required for Keychain credential storage. "
+                "keyring package is required for credential storage. "
                 "Install it with: uv add keyring"
             ) from e
 
         logger.info(
-            f"KeychainCredentialStore initialized (service: {self.SERVICE_NAME})"
+            f"KeyringCredentialStore initialized (service: {self.SERVICE_NAME})"
         )
 
     def _get_users_set(self) -> set:
-        """Get the set of registered users from keychain."""
+        """Get the set of registered users from the keyring."""
         try:
             users_json = self._keyring.get_password(self.SERVICE_NAME, self._USERS_KEY)
             if users_json:
                 return set(json.loads(users_json))
         except (json.JSONDecodeError, TypeError) as e:
-            logger.warning(f"Error reading users list from keychain: {e}")
+            logger.warning(f"Error reading users list from keyring: {e}")
         return set()
 
     def _save_users_set(self, users: set) -> None:
-        """Save the set of registered users to keychain."""
+        """Save the set of registered users to the keyring."""
         try:
             self._keyring.set_password(
                 self.SERVICE_NAME, self._USERS_KEY, json.dumps(sorted(users))
             )
         except Exception as e:
-            logger.error(f"Error saving users list to keychain: {e}")
+            logger.error(f"Error saving users list to keyring: {e}")
 
     def get_credential(self, user_email: str) -> Optional[Credentials]:
-        """Get credentials from macOS Keychain."""
+        """Get credentials from the system keyring."""
         try:
             creds_json = self._keyring.get_password(self.SERVICE_NAME, user_email)
             if not creds_json:
-                logger.debug(f"No credentials found in keychain for {user_email}")
+                logger.debug(f"No credentials found in keyring for {user_email}")
                 return None
 
             creds_data = json.loads(creds_json)
@@ -290,7 +291,7 @@ class KeychainCredentialStore(CredentialStore):
                 expiry=expiry,
             )
 
-            logger.debug(f"Loaded credentials for {user_email} from keychain")
+            logger.debug(f"Loaded credentials for {user_email} from keyring")
             return credentials
 
         except json.JSONDecodeError as e:
@@ -301,7 +302,7 @@ class KeychainCredentialStore(CredentialStore):
             return None
 
     def store_credential(self, user_email: str, credentials: Credentials) -> bool:
-        """Store credentials to macOS Keychain."""
+        """Store credentials to the system keyring."""
         creds_data = {
             "token": credentials.token,
             "refresh_token": credentials.refresh_token,
@@ -322,7 +323,7 @@ class KeychainCredentialStore(CredentialStore):
             users.add(user_email)
             self._save_users_set(users)
 
-            logger.info(f"Stored credentials for {user_email} in keychain")
+            logger.info(f"Stored credentials for {user_email} in keyring")
             return True
 
         except Exception as e:
@@ -330,7 +331,7 @@ class KeychainCredentialStore(CredentialStore):
             return False
 
     def delete_credential(self, user_email: str) -> bool:
-        """Delete credentials from macOS Keychain."""
+        """Delete credentials from the system keyring."""
         try:
             self._keyring.delete_password(self.SERVICE_NAME, user_email)
 
@@ -339,7 +340,7 @@ class KeychainCredentialStore(CredentialStore):
             users.discard(user_email)
             self._save_users_set(users)
 
-            logger.info(f"Deleted credentials for {user_email} from keychain")
+            logger.info(f"Deleted credentials for {user_email} from keyring")
             return True
 
         except self._keyring.errors.PasswordDeleteError:
@@ -353,7 +354,7 @@ class KeychainCredentialStore(CredentialStore):
     def list_users(self) -> List[str]:
         """List all users with stored credentials."""
         users = self._get_users_set()
-        logger.debug(f"Found {len(users)} users with credentials in keychain")
+        logger.debug(f"Found {len(users)} users with credentials in keyring")
         return sorted(users)
 
 
@@ -365,23 +366,15 @@ def get_credential_store() -> CredentialStore:
     """
     Get the global credential store instance.
 
-    CW-MODIFIED: macOS-only with Keychain storage for security.
+    CW-MODIFIED: Uses system keyring for secure credential storage.
 
     Returns:
         Configured credential store instance
-
-    Raises:
-        RuntimeError: If not running on macOS
     """
     global _credential_store
 
     if _credential_store is None:
-        if platform.system() != "Darwin":
-            raise RuntimeError(
-                "This MCP server only supports macOS. "
-                "Credential storage requires macOS Keychain."
-            )
-        _credential_store = KeychainCredentialStore()
+        _credential_store = KeyringCredentialStore()
         logger.info(f"Initialized credential store: {type(_credential_store).__name__}")
 
     return _credential_store

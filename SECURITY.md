@@ -168,9 +168,9 @@ https://www.googleapis.com/auth/calendar.events
 
 ## Token Storage
 
-By default, this server stores OAuth tokens in **macOS Keychain** for persistent, secure storage:
+By default, this server stores OAuth tokens in the **system keyring** for persistent, secure storage:
 
-- Tokens are stored in the system Keychain, protected by macOS security
+- Tokens are stored in the system keyring (macOS Keychain, Windows Credential Manager, or Linux SecretService)
 - Users authenticate once and remain authenticated across sessions
 - No plaintext JSON files are created
 
@@ -180,7 +180,7 @@ By default, this server stores OAuth tokens in **macOS Keychain** for persistent
 - Users must re-authenticate when the server restarts
 - Eliminates persistent credential storage entirely
 
-**Security trade-off:** macOS Keychain provides good protection (requires system password to access), but stateless mode eliminates the credential storage attack surface entirely at the cost of more frequent re-authentication.
+**Security trade-off:** The system keyring provides good protection (e.g. macOS Keychain requires system password, Windows Credential Manager uses DPAPI encryption), but stateless mode eliminates the credential storage attack surface entirely at the cost of more frequent re-authentication.
 
 ## Kill Switch
 
