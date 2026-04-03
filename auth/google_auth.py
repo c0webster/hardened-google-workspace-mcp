@@ -494,7 +494,11 @@ def handle_auth_callback(
 
         # Save the credentials
         credential_store = get_credential_store()
-        credential_store.store_credential(user_google_email, credentials)
+        if not credential_store.store_credential(user_google_email, credentials):
+            logger.warning(
+                f"Failed to persist credentials for {user_google_email}. "
+                f"Credentials exist in memory only and will be lost on restart."
+            )
 
         # Always save to OAuth21SessionStore for centralized management
         store = get_oauth21_session_store()
