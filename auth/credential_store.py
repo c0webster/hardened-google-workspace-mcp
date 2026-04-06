@@ -361,6 +361,71 @@ class KeyringCredentialStore(CredentialStore):
         return sorted(users)
 
 
+class FallbackCredentialStore(CredentialStore):
+    """
+    Credential store that tries keyring first, then falls back to local JSON files.
+
+    On Windows, the Credential Manager has a 2560-byte size limit per entry.
+    Serialized OAuth credentials with 22 scopes exceed this limit (~3250 bytes
+    UTF-16), causing keyring.set_password() to fail silently. This store
+    detects the failure and transparently falls back to LocalDirectoryCredentialStore,
+    which stores credentials as JSON files in ~/.google_workspace_mcp/credentials/.
+    """
+
+    def __init__(self):
+        self._keyring_store = KeyringCredentialStore()
+        self._local_store = LocalDirectoryCredentialStore()
+        # Track users whose credentials fell back to local storage,
+        # so we don't retry keyring on every get_credential() call.
+        self._local_fallback_users: set = set()
+
+    def store_credential(self, user_email: str, credentials: Credentials) -> bool:
+        """Store credentials to keyring; fall back to local JSON on failure."""
+        success = self._keyring_store.store_credential(user_email, credentials)
+        if success:
+            # Verify the credential was actually persisted (catches silent truncation)
+            verify = self._keyring_store.get_credential(user_email)
+            if verify and verify.refresh_token == credentials.refresh_token:
+                self._local_fallback_users.discard(user_email)
+                return True
+            else:
+                logger.warning(
+                    f"Keyring stored credential for {user_email} but verification "
+                    f"failed (likely Windows Credential Manager size limit). "
+                    f"Falling back to local file storage."
+                )
+
+        logger.warning(
+            f"Keyring storage failed for {user_email}. "
+            f"Falling back to local file storage."
+        )
+        self._local_fallback_users.add(user_email)
+        return self._local_store.store_credential(user_email, credentials)
+
+    def get_credential(self, user_email: str) -> Optional[Credentials]:
+        """Check keyring first (unless known to have fallen back), then local JSON."""
+        if user_email not in self._local_fallback_users:
+            creds = self._keyring_store.get_credential(user_email)
+            if creds:
+                return creds
+
+        return self._local_store.get_credential(user_email)
+
+    def delete_credential(self, user_email: str) -> bool:
+        """Delete from both stores to ensure cleanup."""
+        keyring_ok = self._keyring_store.delete_credential(user_email)
+        local_ok = self._local_store.delete_credential(user_email)
+        self._local_fallback_users.discard(user_email)
+        return keyring_ok and local_ok
+
+    def list_users(self) -> List[str]:
+        """Merge users from both stores."""
+        keyring_users = set(self._keyring_store.list_users())
+        local_users = set(self._local_store.list_users())
+        all_users = keyring_users | local_users
+        return sorted(all_users)
+
+
 # Allowlist of trusted keyring backend classes. Any backend not in this list
 # (including keyrings.alt plaintext backends) will be rejected at startup.
 _ALLOWED_BACKEND_CLASSES = {
@@ -441,7 +506,7 @@ def get_credential_store() -> CredentialStore:
 
     if _credential_store is None:
         _validate_keyring_backend()
-        _credential_store = KeyringCredentialStore()
+        _credential_store = FallbackCredentialStore()
         logger.info(f"Initialized credential store: {type(_credential_store).__name__}")
 
     return _credential_store
