@@ -27,6 +27,7 @@ def parse_document_structure(doc_data: dict[str, Any]) -> dict[str, Any]:
         "tables": [],
         "headers": {},
         "footers": {},
+        "footnotes": {},
         "total_length": 0,
     }
 
@@ -51,6 +52,10 @@ def parse_document_structure(doc_data: dict[str, Any]) -> dict[str, Any]:
 
     for footer_id, footer_data in doc_data.get("footers", {}).items():
         structure["footers"][footer_id] = _parse_segment(footer_data)
+
+    # Parse footnotes
+    for footnote_id, footnote_data in doc_data.get("footnotes", {}).items():
+        structure["footnotes"][footnote_id] = _parse_segment(footnote_data)
 
     return structure
 
@@ -342,6 +347,8 @@ def analyze_document_complexity(doc_data: dict[str, Any]) -> dict[str, Any]:
         "total_length": structure["total_length"],
         "has_headers": bool(structure["headers"]),
         "has_footers": bool(structure["footers"]),
+        "has_footnotes": bool(structure["footnotes"]),
+        "footnote_count": len(structure["footnotes"]),
     }
 
     # Add table statistics

@@ -16,6 +16,7 @@ from gdocs.docs_helpers import (
     create_find_replace_request,
     create_insert_table_request,
     create_insert_page_break_request,
+    create_footnote_request,
     validate_operation,
 )
 
@@ -227,6 +228,10 @@ class BatchOperationManager:
             )
             description = f"find/replace '{op['find_text']}' → '{op['replace_text']}'"
 
+        elif op_type == "insert_footnote":
+            request = create_footnote_request(op["index"])
+            description = f"insert footnote at {op['index']}"
+
         else:
             supported_types = [
                 "insert_text",
@@ -235,6 +240,7 @@ class BatchOperationManager:
                 "format_text",
                 "insert_table",
                 "insert_page_break",
+                "insert_footnote",
                 "find_replace",
             ]
             raise ValueError(
@@ -325,6 +331,10 @@ class BatchOperationManager:
                 "insert_page_break": {
                     "required": ["index"],
                     "description": "Insert page break at specified index",
+                },
+                "insert_footnote": {
+                    "required": ["index"],
+                    "description": "Insert an empty footnote reference at specified index (use insert_doc_footnote tool to also populate content)",
                 },
                 "find_replace": {
                     "required": ["find_text", "replace_text"],
