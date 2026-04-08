@@ -20,6 +20,7 @@ from core.comments import create_comment_tools
 # Import helper functions for document operations
 from gdocs.docs_helpers import (
     create_insert_text_request,
+    create_insert_text_segment_request,
     create_delete_range_request,
     create_format_text_request,
     create_find_replace_request,
@@ -27,6 +28,7 @@ from gdocs.docs_helpers import (
     create_insert_page_break_request,
     create_insert_image_request,
     create_bullet_list_request,
+    create_footnote_request,
 )
 
 # Import document structure and table utilities
@@ -152,6 +154,9 @@ async def get_doc_content(
         # Tab header format constant
         TAB_HEADER_FORMAT = "\n--- TAB: {tab_name} ---\n"
 
+        # Collect footnote reference numbers encountered in body text
+        footnote_refs = {}  # footnoteId -> footnote number
+
         def extract_text_from_elements(elements, tab_name=None, depth=0):
             """Extract text from document elements (paragraphs, tables, etc.)"""
             # Prevent infinite recursion by limiting depth
@@ -170,6 +175,13 @@ async def get_doc_content(
                         text_run = pe.get("textRun", {})
                         if text_run and "content" in text_run:
                             current_line_text += text_run["content"]
+                        footnote_ref = pe.get("footnoteReference")
+                        if footnote_ref:
+                            fn_id = footnote_ref.get("footnoteId", "")
+                            fn_number = footnote_ref.get("footnoteNumber", "?")
+                            current_line_text += f"[{fn_number}]"
+                            if fn_id:
+                                footnote_refs[fn_id] = fn_number
                     if current_line_text.strip():
                         text_lines.append(current_line_text)
                 elif "table" in element:
@@ -224,6 +236,24 @@ async def get_doc_content(
                 processed_text_lines.append(tab_content)
 
         body_text = "".join(processed_text_lines)
+
+        # Append footnotes section if any footnote references were found
+        footnotes_map = doc_data.get("footnotes", {})
+        if footnote_refs and footnotes_map:
+            footnote_lines = ["\n\n--- FOOTNOTES ---\n"]
+            for fn_id, fn_number in sorted(footnote_refs.items(), key=lambda x: str(x[1])):
+                fn_data = footnotes_map.get(fn_id, {})
+                fn_content_elements = fn_data.get("content", [])
+                fn_text_parts = []
+                for fn_element in fn_content_elements:
+                    if "paragraph" in fn_element:
+                        for pe in fn_element["paragraph"].get("elements", []):
+                            text_run = pe.get("textRun", {})
+                            if text_run and "content" in text_run:
+                                fn_text_parts.append(text_run["content"])
+                fn_text = "".join(fn_text_parts).strip()
+                footnote_lines.append(f"[{fn_number}] {fn_text}\n")
+            body_text += "".join(footnote_lines)
     else:
         logger.info(
             f"[get_doc_content] Processing as Drive file (e.g., .docx, other). MimeType: {mime_type}"
@@ -958,6 +988,8 @@ async def inspect_doc_structure(
                 ),
                 "has_headers": bool(structure["headers"]),
                 "has_footers": bool(structure["footers"]),
+                "has_footnotes": bool(structure["footnotes"]),
+                "footnote_count": len(structure["footnotes"]),
             },
             "elements": [],
         }
@@ -996,6 +1028,27 @@ async def inspect_doc_structure(
                             "columns": table["columns"],
                         },
                         "preview": table_data[:3] if table_data else [],  # First 3 rows
+                    }
+                )
+
+        # Add footnote details in detailed mode
+        if structure["footnotes"]:
+            result["footnotes"] = []
+            for fn_id, fn_data in structure["footnotes"].items():
+                # Extract text preview from footnote content
+                fn_text_parts = []
+                for fn_element in fn_data.get("content", []):
+                    if "paragraph" in fn_element:
+                        paragraph = fn_element["paragraph"]
+                        for pe in paragraph.get("elements", []):
+                            text_run = pe.get("textRun", {})
+                            if text_run and "content" in text_run:
+                                fn_text_parts.append(text_run["content"])
+                fn_text = "".join(fn_text_parts).strip()
+                result["footnotes"].append(
+                    {
+                        "footnote_id": fn_id,
+                        "text_preview": fn_text[:100],
                     }
                 )
 
@@ -1326,6 +1379,182 @@ async def export_doc_to_pdf(
 
     except Exception as e:
         return f"Error: Failed to upload PDF to Drive: {str(e)}. PDF was generated successfully ({pdf_size:,} bytes) but could not be saved to Drive."
+
+
+@server.tool()
+@handle_http_errors("read_doc_footnotes", is_read_only=True, service_type="docs")
+@require_google_service("docs", "docs_read")
+async def read_doc_footnotes(
+    service: Any,
+    user_google_email: str,
+    document_id: str,
+) -> str:
+    """
+    Reads all footnotes from a Google Doc.
+
+    Returns each footnote with its ID, number (from body references), and text content.
+
+    Args:
+        user_google_email: User's Google email address
+        document_id: ID of the document to read footnotes from
+
+    Returns:
+        str: Formatted list of all footnotes in the document
+    """
+    logger.info(f"[read_doc_footnotes] Doc={document_id}")
+
+    doc = await asyncio.to_thread(
+        service.documents().get(documentId=document_id).execute
+    )
+
+    footnotes_map = doc.get("footnotes", {})
+    if not footnotes_map:
+        link = f"https://docs.google.com/document/d/{document_id}/edit"
+        return f"No footnotes found in document {document_id}. Link: {link}"
+
+    # Build a mapping from footnote ID to footnote number by scanning body references
+    fn_id_to_number = {}
+    body_content = doc.get("body", {}).get("content", [])
+
+    def _scan_elements_for_footnote_refs(elements):
+        for element in elements:
+            if "paragraph" in element:
+                for pe in element["paragraph"].get("elements", []):
+                    fn_ref = pe.get("footnoteReference")
+                    if fn_ref:
+                        fn_id = fn_ref.get("footnoteId", "")
+                        fn_num = fn_ref.get("footnoteNumber", "?")
+                        if fn_id:
+                            fn_id_to_number[fn_id] = fn_num
+            elif "table" in element:
+                for row in element["table"].get("tableRows", []):
+                    for cell in row.get("tableCells", []):
+                        _scan_elements_for_footnote_refs(cell.get("content", []))
+
+    _scan_elements_for_footnote_refs(body_content)
+
+    # Format each footnote
+    output_lines = [f"Footnotes in document {document_id} ({len(footnotes_map)} total):\n"]
+
+    for fn_id, fn_data in footnotes_map.items():
+        fn_number = fn_id_to_number.get(fn_id, "?")
+        fn_content_elements = fn_data.get("content", [])
+        fn_text_parts = []
+        for fn_element in fn_content_elements:
+            if "paragraph" in fn_element:
+                for pe in fn_element["paragraph"].get("elements", []):
+                    text_run = pe.get("textRun", {})
+                    if text_run and "content" in text_run:
+                        fn_text_parts.append(text_run["content"])
+        fn_text = "".join(fn_text_parts).strip()
+
+        output_lines.append(f"[{fn_number}] (ID: {fn_id})")
+        output_lines.append(f"    {fn_text}\n")
+
+    link = f"https://docs.google.com/document/d/{document_id}/edit"
+    output_lines.append(f"Link: {link}")
+    return "\n".join(output_lines)
+
+
+@server.tool()
+@handle_http_errors("insert_doc_footnote", service_type="docs")
+@require_google_service("docs", "docs_write")
+async def insert_doc_footnote(
+    service: Any,
+    user_google_email: str,
+    document_id: str,
+    index: int,
+    content: str = "",
+) -> str:
+    """
+    Inserts a footnote into a Google Doc at the specified position.
+
+    Creates a footnote reference marker in the document body at the given index.
+    If content is provided, populates the footnote with that text.
+
+    Args:
+        user_google_email: User's Google email address
+        document_id: ID of the document to update
+        index: Position in the document body where the footnote reference should be placed
+        content: Optional text content for the footnote body
+
+    Returns:
+        str: Confirmation message with footnote details
+    """
+    logger.info(f"[insert_doc_footnote] Doc={document_id}, index={index}, content={bool(content)}")
+
+    if index < 1:
+        return "Error: index must be >= 1 (index 0 is reserved for the document section break)."
+
+    # Step 1: Create the footnote reference in the body
+    create_request = create_footnote_request(index)
+    result = await asyncio.to_thread(
+        service.documents()
+        .batchUpdate(documentId=document_id, body={"requests": [create_request]})
+        .execute
+    )
+
+    # Extract the footnoteId from the response
+    footnote_id = None
+    for reply in result.get("replies", []):
+        if "createFootnote" in reply:
+            footnote_id = reply["createFootnote"].get("footnoteId")
+            break
+
+    if not footnote_id:
+        return f"Error: Footnote was created but could not retrieve footnote ID from API response."
+
+    # Step 2: If content provided, populate the footnote body
+    if content:
+        # The newly created footnote has a default paragraph with a newline.
+        # We need to fetch the doc to find the footnote's content indices,
+        # then delete the default content and insert our text.
+        doc = await asyncio.to_thread(
+            service.documents().get(documentId=document_id).execute
+        )
+
+        fn_data = doc.get("footnotes", {}).get(footnote_id, {})
+        fn_content = fn_data.get("content", [])
+
+        if fn_content:
+            # Find the range of existing content in the footnote segment
+            first_element = fn_content[0]
+            last_element = fn_content[-1]
+            fn_start = first_element.get("startIndex", 0)
+            fn_end = last_element.get("endIndex", 0)
+
+            # Build requests to clear default content and insert new text
+            # The footnote segment always starts with a paragraph; insert at the start
+            content_requests = []
+
+            # Delete existing content (the default space/newline), leaving the structural minimum
+            if fn_end > fn_start + 1:
+                content_requests.append(
+                    {
+                        "deleteContentRange": {
+                            "range": {
+                                "segmentId": footnote_id,
+                                "startIndex": fn_start,
+                                "endIndex": fn_end - 1,
+                            }
+                        }
+                    }
+                )
+
+            # Insert the desired text at the start of the footnote
+            content_requests.append(
+                create_insert_text_segment_request(fn_start, content, footnote_id)
+            )
+
+            await asyncio.to_thread(
+                service.documents()
+                .batchUpdate(documentId=document_id, body={"requests": content_requests})
+                .execute
+            )
+
+    link = f"https://docs.google.com/document/d/{document_id}/edit"
+    content_info = f" Content: '{content[:50]}{'...' if len(content) > 50 else ''}'" if content else ""
+    return f"Inserted footnote (ID: {footnote_id}) at index {index} in document {document_id}.{content_info} Link: {link}"
 
 
 # Create comment management tools for documents

@@ -278,6 +278,19 @@ def create_insert_image_request(
     return request
 
 
+def create_footnote_request(index: int) -> Dict[str, Any]:
+    """
+    Create a createFootnote request for Google Docs API.
+
+    Args:
+        index: Position in the document body where the footnote reference should be inserted
+
+    Returns:
+        Dictionary representing the createFootnote request
+    """
+    return {"createFootnote": {"location": {"index": index}}}
+
+
 def create_bullet_list_request(
     start_index: int, end_index: int, list_type: str = "UNORDERED"
 ) -> Dict[str, Any]:
@@ -328,6 +341,7 @@ def validate_operation(operation: Dict[str, Any]) -> tuple[bool, str]:
         "format_text": ["start_index", "end_index"],
         "insert_table": ["index", "rows", "columns"],
         "insert_page_break": ["index"],
+        "insert_footnote": ["index"],
         "find_replace": ["find_text", "replace_text"],
     }
 
