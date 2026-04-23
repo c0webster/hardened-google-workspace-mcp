@@ -820,7 +820,11 @@ async def get_gmail_attachment_content(
 
     # Save attachment and generate URL
     try:
-        from core.attachment_storage import get_attachment_storage, get_attachment_url
+        from core.attachment_storage import (
+            get_attachment_storage,
+            get_attachment_url,
+            get_attachment_local_path,
+        )
 
         storage = get_attachment_storage()
 
@@ -854,15 +858,23 @@ async def get_gmail_attachment_content(
             base64_data=base64_data, filename=filename, mime_type=mime_type
         )
 
-        # Generate URL
+        # Generate URL and local filesystem path. The URL works for remote
+        # clients; the local path is a direct shortcut for clients running
+        # on the same host as the server.
         attachment_url = get_attachment_url(file_id)
+        local_path = get_attachment_local_path(file_id)
 
         result_lines = [
             "Attachment downloaded successfully!",
             f"Message ID: {message_id}",
             f"Size: {size_kb:.1f} KB ({size_bytes} bytes)",
             f"\n📎 Download URL: {attachment_url}",
-            "\nThe attachment has been saved and is available at the URL above.",
+        ]
+        if local_path:
+            result_lines.append(f"📁 Local path: {local_path}")
+        result_lines += [
+            "\nThe attachment has been saved and is available at the URL above",
+            "(or directly at the local path when the client shares the server's filesystem).",
             "The file will expire after 1 hour.",
             "\nNote: Attachment IDs are ephemeral. Always use IDs from the most recent message fetch.",
         ]

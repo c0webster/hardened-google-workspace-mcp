@@ -17,8 +17,10 @@ logger = logging.getLogger(__name__)
 # Default expiration: 1 hour
 DEFAULT_EXPIRATION_SECONDS = 3600
 
-# Storage directory
-STORAGE_DIR = Path("./tmp/attachments")
+# Storage directory (resolved to absolute path so the path returned to
+# clients is unambiguous regardless of the server's current working
+# directory).
+STORAGE_DIR = Path("./tmp/attachments").resolve()
 STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -215,3 +217,14 @@ def get_attachment_url(file_id: str) -> str:
         base_url = f"{WORKSPACE_MCP_BASE_URI}:{WORKSPACE_MCP_PORT}"
 
     return f"{base_url}/attachments/{file_id}"
+
+
+def get_attachment_local_path(file_id: str) -> Optional[str]:
+    """
+    Return the absolute filesystem path for a saved attachment, or None.
+
+    Useful when the MCP client runs on the same host as the server and can
+    read the file directly instead of fetching it over HTTP.
+    """
+    path = get_attachment_storage().get_attachment_path(file_id)
+    return str(path) if path else None

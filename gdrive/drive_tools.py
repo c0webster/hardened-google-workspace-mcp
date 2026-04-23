@@ -20,7 +20,11 @@ from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 
 from auth.service_decorator import require_google_service
 from auth.oauth_config import is_stateless_mode
-from core.attachment_storage import get_attachment_storage, get_attachment_url
+from core.attachment_storage import (
+    get_attachment_storage,
+    get_attachment_url,
+    get_attachment_local_path,
+)
 from core.utils import extract_office_xml_text, handle_http_errors
 from core.server import server
 from gdrive.drive_helpers import (
@@ -350,8 +354,11 @@ async def get_drive_file_download_url(
             mime_type=output_mime_type,
         )
 
-        # Generate URL
+        # Generate URL and local path. The URL works for remote clients;
+        # the local path is a direct filesystem shortcut for clients
+        # running on the same host as the server.
         download_url = get_attachment_url(saved_file_id)
+        local_path = get_attachment_local_path(saved_file_id)
 
         result_lines = [
             "File downloaded successfully!",
@@ -360,7 +367,12 @@ async def get_drive_file_download_url(
             f"Size: {size_kb:.1f} KB ({size_bytes} bytes)",
             f"MIME Type: {output_mime_type}",
             f"\n📎 Download URL: {download_url}",
-            "\nThe file has been saved and is available at the URL above.",
+        ]
+        if local_path:
+            result_lines.append(f"📁 Local path: {local_path}")
+        result_lines += [
+            "\nThe file has been saved and is available at the URL above",
+            "(or directly at the local path when the client shares the server's filesystem).",
             "The file will expire after 1 hour.",
         ]
 
