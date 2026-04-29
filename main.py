@@ -131,6 +131,11 @@ def main():
     base_uri = os.getenv("WORKSPACE_MCP_BASE_URI", "http://localhost")
     external_url = os.getenv("WORKSPACE_EXTERNAL_URL")
     display_url = external_url if external_url else f"{base_uri}:{port}"
+    # Bind address for the HTTP server. Defaults to 0.0.0.0 (all interfaces) for
+    # backward compatibility with server-style deployments. For local single-user
+    # use (e.g., a per-laptop singleton), set WORKSPACE_MCP_HOST=127.0.0.1 to
+    # restrict to loopback only and avoid exposing the MCP to the LAN.
+    bind_host = os.getenv("WORKSPACE_MCP_HOST", "0.0.0.0")
 
     safe_print("🔧 Google Workspace MCP Server")
     safe_print("=" * 35)
@@ -330,7 +335,7 @@ def main():
             # Check port availability before starting HTTP server
             try:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                    s.bind(("", port))
+                    s.bind((bind_host, port))
             except OSError as e:
                 safe_print(f"Socket error: {e}")
                 safe_print(
@@ -338,7 +343,7 @@ def main():
                 )
                 sys.exit(1)
 
-            server.run(transport="streamable-http", host="0.0.0.0", port=port)
+            server.run(transport="streamable-http", host=bind_host, port=port)
         else:
             server.run()
     except KeyboardInterrupt:
