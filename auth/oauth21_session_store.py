@@ -8,6 +8,10 @@ session context management and credential conversion functionality.
 
 import contextvars
 import logging
+import os
+import sqlite3
+from contextlib import contextmanager
+from pathlib import Path
 from typing import Dict, Optional, Any, Tuple
 from threading import RLock
 from datetime import datetime, timedelta, timezone
@@ -173,6 +177,80 @@ def extract_session_from_headers(headers: Dict[str, str]) -> Optional[str]:
 
 
 # =============================================================================
+# OAuth State Persistence — SQLite-backed for cross-process safety
+# =============================================================================
+#
+# The MCP server can run as multiple concurrent processes (Claude Desktop +
+# Claude Code subprocesses each spawn their own instance). The in-memory state
+# dict that originally lived on OAuth21SessionStore was per-process, so OAuth
+# flows broke when the initiating process and the callback-receiving process
+# differed. This SQLite store is shared by every process on the machine.
+
+_OAUTH_STATE_DB_INIT_LOCK = RLock()
+_OAUTH_STATE_DB_INITIALIZED = False
+
+
+def _get_oauth_state_db_path() -> str:
+    """Resolve the file path for the cross-process OAuth state database."""
+    custom = os.getenv("GOOGLE_MCP_OAUTH_STATE_DB")
+    if custom:
+        return custom
+    home_dir = os.path.expanduser("~")
+    if home_dir and home_dir != "~":
+        base_dir = os.path.join(home_dir, ".google_workspace_mcp")
+    else:
+        base_dir = os.path.join(os.getcwd(), ".google_workspace_mcp")
+    return os.path.join(base_dir, "oauth_state.db")
+
+
+def _ensure_oauth_state_db_initialized(path: str) -> None:
+    """Create the directory and schema once per process."""
+    global _OAUTH_STATE_DB_INITIALIZED
+    with _OAUTH_STATE_DB_INIT_LOCK:
+        if _OAUTH_STATE_DB_INITIALIZED:
+            return
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(path, timeout=10)
+        try:
+            # WAL mode allows concurrent readers and a single writer without
+            # readers blocking each other; once enabled, it persists in the file.
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA busy_timeout=10000")
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS oauth_states (
+                    state TEXT PRIMARY KEY,
+                    session_id TEXT,
+                    expires_at TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_oauth_states_expires "
+                "ON oauth_states(expires_at)"
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        _OAUTH_STATE_DB_INITIALIZED = True
+        logger.debug("Initialized OAuth state DB at %s", path)
+
+
+@contextmanager
+def _open_oauth_state_db():
+    """Open a short-lived SQLite connection for one OAuth state operation."""
+    path = _get_oauth_state_db_path()
+    _ensure_oauth_state_db_initialized(path)
+    conn = sqlite3.connect(path, timeout=10)
+    try:
+        conn.execute("PRAGMA busy_timeout=10000")
+        yield conn
+    finally:
+        conn.close()
+
+
+# =============================================================================
 # OAuth21SessionStore - Main Session Management
 # =============================================================================
 
@@ -197,23 +275,23 @@ class OAuth21SessionStore:
         self._session_auth_binding: Dict[
             str, str
         ] = {}  # Maps session ID -> authenticated user email (immutable)
-        self._oauth_states: Dict[str, Dict[str, Any]] = {}
         self._lock = RLock()
 
     def _cleanup_expired_oauth_states_locked(self):
         """Remove expired OAuth state entries. Caller must hold lock."""
         now = datetime.now(timezone.utc)
-        expired_states = [
-            state
-            for state, data in self._oauth_states.items()
-            if data.get("expires_at") and data["expires_at"] <= now
-        ]
-        for state in expired_states:
-            del self._oauth_states[state]
-            logger.debug(
-                "Removed expired OAuth state: %s",
-                state[:8] if len(state) > 8 else state,
-            )
+        with _open_oauth_state_db() as conn:
+            with conn:
+                cursor = conn.execute(
+                    "DELETE FROM oauth_states WHERE expires_at <= ? "
+                    "RETURNING state",
+                    (now.isoformat(),),
+                )
+                for (state,) in cursor.fetchall():
+                    logger.debug(
+                        "Removed expired OAuth state: %s",
+                        state[:8] if len(state) > 8 else state,
+                    )
 
     def store_oauth_state(
         self,
@@ -231,11 +309,14 @@ class OAuth21SessionStore:
             self._cleanup_expired_oauth_states_locked()
             now = datetime.now(timezone.utc)
             expiry = now + timedelta(seconds=expires_in_seconds)
-            self._oauth_states[state] = {
-                "session_id": session_id,
-                "expires_at": expiry,
-                "created_at": now,
-            }
+            with _open_oauth_state_db() as conn:
+                with conn:
+                    conn.execute(
+                        "INSERT OR REPLACE INTO oauth_states "
+                        "(state, session_id, expires_at, created_at) "
+                        "VALUES (?, ?, ?, ?)",
+                        (state, session_id, expiry.isoformat(), now.isoformat()),
+                    )
             logger.debug(
                 "Stored OAuth state %s (expires at %s)",
                 state[:8] if len(state) > 8 else state,
@@ -265,18 +346,32 @@ class OAuth21SessionStore:
 
         with self._lock:
             self._cleanup_expired_oauth_states_locked()
-            state_info = self._oauth_states.get(state)
+            # Atomic delete-and-return so two processes can't both consume the same state.
+            with _open_oauth_state_db() as conn:
+                with conn:
+                    cursor = conn.execute(
+                        "DELETE FROM oauth_states WHERE state = ? "
+                        "RETURNING session_id, expires_at, created_at",
+                        (state,),
+                    )
+                    row = cursor.fetchone()
 
-            if not state_info:
+            if not row:
                 logger.error(
                     "SECURITY: OAuth callback received unknown or expired state"
                 )
                 raise ValueError("Invalid or expired OAuth state parameter")
 
-            bound_session = state_info.get("session_id")
+            bound_session, expires_at_iso, created_at_iso = row
+            state_info: Dict[str, Any] = {
+                "session_id": bound_session,
+                "expires_at": datetime.fromisoformat(expires_at_iso),
+                "created_at": datetime.fromisoformat(created_at_iso),
+            }
+
             if bound_session and session_id and bound_session != session_id:
-                # Consume the state to prevent replay attempts
-                del self._oauth_states[state]
+                # State already deleted above, satisfying the original "consume on
+                # mismatch" replay-prevention behavior.
                 logger.error(
                     "SECURITY: OAuth state session mismatch (expected %s, got %s)",
                     bound_session,
@@ -284,8 +379,6 @@ class OAuth21SessionStore:
                 )
                 raise ValueError("OAuth state does not match the initiating session")
 
-            # State is valid – consume it to prevent reuse
-            del self._oauth_states[state]
             logger.debug(
                 "Validated OAuth state %s",
                 state[:8] if len(state) > 8 else state,
