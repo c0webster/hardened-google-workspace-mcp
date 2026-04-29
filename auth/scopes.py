@@ -13,9 +13,14 @@ logger = logging.getLogger(__name__)
 _ENABLED_TOOLS = None
 
 # Individual OAuth Scope Constants
-USERINFO_EMAIL_SCOPE = "https://www.googleapis.com/auth/userinfo.email"
-USERINFO_PROFILE_SCOPE = "https://www.googleapis.com/auth/userinfo.profile"
+# Per Google OIDC spec (https://developers.google.com/identity/openid-connect/openid-connect#scope-param):
+# "The scope parameter must begin with the `openid` value and then include the `profile` value,
+#  the `email` value, or both." Use OIDC short-form scopes for identity, NOT URL-form
+# (`userinfo.email`/`userinfo.profile`). Mixing URL-form userinfo with `openid` triggers
+# invalid_scope errors in Testing-mode OAuth flows.
 OPENID_SCOPE = "openid"
+USERINFO_EMAIL_SCOPE = "email"
+USERINFO_PROFILE_SCOPE = "profile"
 CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar"
 CALENDAR_READONLY_SCOPE = "https://www.googleapis.com/auth/calendar.readonly"
 CALENDAR_EVENTS_SCOPE = "https://www.googleapis.com/auth/calendar.events"
@@ -64,8 +69,9 @@ TASKS_READONLY_SCOPE = "https://www.googleapis.com/auth/tasks.readonly"
 # Google Custom Search API scope
 CUSTOM_SEARCH_SCOPE = "https://www.googleapis.com/auth/cse"
 
-# Base OAuth scopes required for user identification
-BASE_SCOPES = [USERINFO_EMAIL_SCOPE, USERINFO_PROFILE_SCOPE, OPENID_SCOPE]
+# Base OAuth scopes required for user identification.
+# OPENID_SCOPE MUST come first per OIDC spec.
+BASE_SCOPES = [OPENID_SCOPE, USERINFO_EMAIL_SCOPE, USERINFO_PROFILE_SCOPE]
 
 # Service-specific scope groups
 DOCS_SCOPES = [DOCS_READONLY_SCOPE, DOCS_WRITE_SCOPE]
@@ -138,19 +144,24 @@ def get_current_scopes():
         # Default behavior - return all scopes
         enabled_tools = TOOL_SCOPES_MAP.keys()
 
-    # Start with base scopes (always required)
-    scopes = BASE_SCOPES.copy()
+    # Start with base scopes (openid first per OIDC spec)
+    scopes = list(BASE_SCOPES)
+    seen = set(scopes)
 
-    # Add scopes for each enabled tool
+    # Add scopes for each enabled tool, preserving order (no set() randomization).
+    # OIDC spec requires openid scope FIRST, and Google's OAuth validator
+    # is sensitive to scope ordering when openid is present.
     for tool in enabled_tools:
         if tool in TOOL_SCOPES_MAP:
-            scopes.extend(TOOL_SCOPES_MAP[tool])
+            for s in TOOL_SCOPES_MAP[tool]:
+                if s not in seen:
+                    scopes.append(s)
+                    seen.add(s)
 
     logger.debug(
-        f"Generated scopes for tools {list(enabled_tools)}: {len(set(scopes))} unique scopes"
+        f"Generated scopes for tools {list(enabled_tools)}: {len(scopes)} unique scopes"
     )
-    # Return unique scopes
-    return list(set(scopes))
+    return scopes
 
 
 def get_scopes_for_tools(enabled_tools=None):
@@ -167,16 +178,18 @@ def get_scopes_for_tools(enabled_tools=None):
         # Default behavior - return all scopes
         enabled_tools = TOOL_SCOPES_MAP.keys()
 
-    # Start with base scopes (always required)
-    scopes = BASE_SCOPES.copy()
+    # Base scopes first (openid first per OIDC spec)
+    scopes = list(BASE_SCOPES)
+    seen = set(scopes)
 
-    # Add scopes for each enabled tool
     for tool in enabled_tools:
         if tool in TOOL_SCOPES_MAP:
-            scopes.extend(TOOL_SCOPES_MAP[tool])
+            for s in TOOL_SCOPES_MAP[tool]:
+                if s not in seen:
+                    scopes.append(s)
+                    seen.add(s)
 
-    # Return unique scopes
-    return list(set(scopes))
+    return scopes
 
 
 # Combined scopes for all supported Google Workspace operations (backwards compatibility)

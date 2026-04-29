@@ -6,6 +6,13 @@ import sys
 from importlib import metadata, import_module
 from dotenv import load_dotenv
 
+# CW-MODIFIED: Relax oauthlib's strict scope-match check.
+# Google's OAuth server normalizes OIDC short-form scopes (email, profile) into
+# URL-form equivalents (userinfo.email, userinfo.profile) in the granted token.
+# Without this, oauthlib treats Google's documented normalization as a scope mismatch
+# and rejects the token at the callback. Must be set before oauthlib is imported.
+os.environ.setdefault("OAUTHLIB_RELAX_TOKEN_SCOPE", "1")
+
 from auth.oauth_config import reload_oauth_config, is_stateless_mode
 from core.log_formatter import EnhancedLogFormatter, configure_file_logging
 from core.utils import check_credentials_directory_permissions
