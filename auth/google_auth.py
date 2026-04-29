@@ -349,6 +349,13 @@ async def start_auth_flow(
             )
             os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 
+        # Google's OAuth server normalizes OIDC short-form scopes (email, profile)
+        # into their URL-form equivalents (userinfo.email, userinfo.profile) in the
+        # granted token. The default oauthlib behavior is to reject this as a scope
+        # mismatch. We accept Google's normalization since it's documented behavior.
+        if "OAUTHLIB_RELAX_TOKEN_SCOPE" not in os.environ:
+            os.environ["OAUTHLIB_RELAX_TOKEN_SCOPE"] = "1"
+
         oauth_state = os.urandom(16).hex()
 
         flow = create_oauth_flow(
