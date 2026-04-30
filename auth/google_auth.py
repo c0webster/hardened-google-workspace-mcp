@@ -604,10 +604,38 @@ def get_credentials(
 
     # Check for single-user mode
     if os.getenv("MCP_SINGLE_USER_MODE") == "1":
-        logger.info(
-            "[get_credentials] Single-user mode: bypassing session mapping, finding any credentials"
-        )
-        credentials = _find_any_credentials(credentials_base_dir)
+        credentials = None
+
+        # CW-MODIFIED: Even in single-user mode, respect user_google_email when
+        # explicitly provided. The original behavior unconditionally returned the
+        # first credentials found via _find_any_credentials, which breaks
+        # multi-account singleton deployments where one MCP serves multiple Google
+        # accounts (e.g., consumer Gmail + Workspace) selected per-call via
+        # user_google_email. Falls back to "any credentials" only when no email
+        # was specified — preserving the original UX for true single-account use.
+        if user_google_email:
+            try:
+                store = get_credential_store()
+                credentials = store.get_credential(user_google_email)
+                if credentials:
+                    logger.info(
+                        f"[get_credentials] Single-user mode: loaded credentials for explicit user '{user_google_email}'"
+                    )
+                else:
+                    logger.info(
+                        f"[get_credentials] Single-user mode: no credentials found for explicit user '{user_google_email}', falling back to any-credentials"
+                    )
+            except Exception as e:
+                logger.warning(
+                    f"[get_credentials] Single-user mode: error looking up '{user_google_email}': {e}, falling back to any-credentials"
+                )
+
+        if not credentials:
+            logger.info(
+                "[get_credentials] Single-user mode: bypassing session mapping, finding any credentials"
+            )
+            credentials = _find_any_credentials(credentials_base_dir)
+
         if not credentials:
             logger.info(
                 f"[get_credentials] Single-user mode: No credentials found in {credentials_base_dir}"
