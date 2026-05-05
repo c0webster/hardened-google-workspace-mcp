@@ -326,8 +326,49 @@ class AuthInfoMiddleware(Middleware):
                     except Exception as e:
                         logger.debug(f"Error checking stdio session: {e}")
 
-                # If no requested user was provided but exactly one session exists, assume it in stdio mode
-                if not context.fastmcp_context.get_state("authenticated_user_email"):
+                    # CW-MODIFIED: If the requested user has no in-memory OAuth 2.1
+                    # session but credentials exist on disk (e.g., after MCP restart
+                    # before that user has been "warmed"), trust the explicit
+                    # user_google_email parameter. The downstream get_credentials()
+                    # path (single-user-respect-email, PR #11) will load credentials
+                    # from the credential_store.
+                    #
+                    # Without this, the silent fallback below could reroute the call
+                    # to the only currently-warmed user, returning the wrong account's
+                    # data to a caller that explicitly asked for a different account.
+                    if not context.fastmcp_context.get_state("authenticated_user_email"):
+                        try:
+                            from auth.credential_store import get_credential_store
+
+                            cred_store = get_credential_store()
+                            if cred_store.get_credential(requested_user) is not None:
+                                logger.debug(
+                                    f"No stdio session for {requested_user}, "
+                                    f"but credentials exist on disk — honoring explicit "
+                                    f"user_google_email parameter"
+                                )
+                                context.fastmcp_context.set_state(
+                                    "authenticated_user_email", requested_user
+                                )
+                                context.fastmcp_context.set_state(
+                                    "authenticated_via", "stdio_credential_store"
+                                )
+                                context.fastmcp_context.set_state(
+                                    "auth_provider_type", "oauth21_stdio"
+                                )
+                        except Exception as e:
+                            logger.debug(
+                                f"Error checking credential store for {requested_user}: {e}"
+                            )
+
+                # CW-MODIFIED: Single-user fallback ONLY fires when no user was explicitly
+                # requested. Previously this fell through unconditionally, causing silent
+                # account-rerouting when a caller passed user_google_email for a user
+                # whose OAuth 2.1 session hadn't been warmed yet — the request would be
+                # silently served from whichever user happened to have an active session.
+                if not requested_user and not context.fastmcp_context.get_state(
+                    "authenticated_user_email"
+                ):
                     try:
                         from auth.oauth21_session_store import get_oauth21_session_store
 
