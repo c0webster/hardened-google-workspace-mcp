@@ -549,7 +549,23 @@ def get_credentials(
         Valid Credentials object or None.
     """
     # First, try OAuth 2.1 session store if we have a session_id (FastMCP session)
-    if session_id:
+    #
+    # CW-MODIFIED: In single-user mode with an explicit user_google_email, skip the
+    # OAuth 2.1 session-store lookup entirely. The store creates an immutable binding
+    # between MCP session_id and the FIRST user authenticated on that session
+    # (oauth21_session_store.py:437-450). In a multi-account stdio singleton, calls
+    # for user A warm the binding, then calls for user B on the same MCP session
+    # silently return user A's credentials — the immutable binding overrides
+    # per-call user_google_email routing.
+    #
+    # Skipping straight to single-user mode below (line ~605) lets PR #11's
+    # credential_store lookup honor the explicit user_google_email parameter.
+    # In multi-user mode this guard is inert (MCP_SINGLE_USER_MODE != "1").
+    skip_oauth21_lookup = (
+        os.getenv("MCP_SINGLE_USER_MODE") == "1" and bool(user_google_email)
+    )
+
+    if session_id and not skip_oauth21_lookup:
         try:
             store = get_oauth21_session_store()
 
