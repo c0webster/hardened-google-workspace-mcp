@@ -108,16 +108,21 @@ class LocalDirectoryCredentialStore(CredentialStore):
         if not user_email or "/" in user_email or "\\" in user_email:
             raise ValueError("Credential user email must be a non-empty file name")
 
-        base_path = Path(self.base_dir).expanduser().resolve()
-        if not base_path.exists():
-            base_path.mkdir(parents=True)
-            logger.info(f"Created credentials directory: {self.base_dir}")
+        base_path = self._get_base_path(create=True)
 
         credential_path = (base_path / f"{user_email}.json").resolve()
         if credential_path.parent != base_path:
             raise ValueError("Credential user email resolves outside credential directory")
 
         return str(credential_path)
+
+    def _get_base_path(self, create: bool = False) -> Path:
+        """Resolve the configured credential directory consistently."""
+        base_path = Path(self.base_dir).expanduser().resolve()
+        if create and not base_path.exists():
+            base_path.mkdir(parents=True)
+            logger.info(f"Created credentials directory: {self.base_dir}")
+        return base_path
 
     def get_credential(self, user_email: str) -> Optional[Credentials]:
         """Get credentials from local JSON file."""
@@ -208,20 +213,21 @@ class LocalDirectoryCredentialStore(CredentialStore):
 
     def list_users(self) -> List[str]:
         """List all users with credential files."""
-        if not os.path.exists(self.base_dir):
+        base_path = self._get_base_path()
+        if not base_path.is_dir():
             return []
 
         users = []
         try:
-            for filename in os.listdir(self.base_dir):
-                if filename.endswith(".json"):
-                    user_email = filename[:-5]  # Remove .json extension
+            for credential_file in base_path.iterdir():
+                if credential_file.is_file() and credential_file.name.endswith(".json"):
+                    user_email = credential_file.name[:-5]  # Remove .json extension
                     users.append(user_email)
             logger.debug(
-                f"Found {len(users)} users with credentials in {self.base_dir}"
+                f"Found {len(users)} users with credentials in {base_path}"
             )
         except OSError as e:
-            logger.error(f"Error listing credential files in {self.base_dir}: {e}")
+            logger.error(f"Error listing credential files in {base_path}: {e}")
 
         return sorted(users)
 

@@ -178,7 +178,7 @@ The keyring backend is **validated at startup** against an allowlist of trusted 
 
 Users authenticate once and remain authenticated across sessions. No plaintext JSON files are created.
 
-The legacy local-directory credential store is retained for tests and explicit embedding use only. It rejects path-like user identifiers before building a credential file path, preventing malformed account names from escaping the configured credential directory.
+The legacy local-directory credential store is retained for tests and explicit embedding use only. It rejects path-like user identifiers before building a credential file path, resolves the configured credential directory consistently (including `~` expansion), and prevents malformed account names from escaping that directory.
 
 **Linux security note:** SecretService stores secrets in a user-session keyring that any process running as the same user can read. This is weaker than macOS Keychain (which can prompt for a password). On shared Linux systems, consider stateless mode instead.
 

@@ -32,6 +32,14 @@ def test_local_directory_store_round_trips_credentials(tmp_path):
     assert store.list_users() == ["user@example.com"]
 
 
+def test_local_directory_store_lists_users_from_expanded_base_dir(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    store = LocalDirectoryCredentialStore(base_dir="~/credentials")
+
+    assert store.store_credential("user@example.com", _credentials()) is True
+    assert store.list_users() == ["user@example.com"]
+
+
 @pytest.mark.parametrize(
     "user_email",
     [
