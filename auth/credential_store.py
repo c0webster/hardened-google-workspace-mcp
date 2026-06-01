@@ -13,6 +13,7 @@ import json
 import logging
 import os
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Optional, List
 from datetime import datetime
 from google.oauth2.credentials import Credentials
@@ -104,10 +105,19 @@ class LocalDirectoryCredentialStore(CredentialStore):
 
     def _get_credential_path(self, user_email: str) -> str:
         """Get the file path for a user's credentials."""
-        if not os.path.exists(self.base_dir):
-            os.makedirs(self.base_dir)
+        if not user_email or "/" in user_email or "\\" in user_email:
+            raise ValueError("Credential user email must be a non-empty file name")
+
+        base_path = Path(self.base_dir).expanduser().resolve()
+        if not base_path.exists():
+            base_path.mkdir(parents=True)
             logger.info(f"Created credentials directory: {self.base_dir}")
-        return os.path.join(self.base_dir, f"{user_email}.json")
+
+        credential_path = (base_path / f"{user_email}.json").resolve()
+        if credential_path.parent != base_path:
+            raise ValueError("Credential user email resolves outside credential directory")
+
+        return str(credential_path)
 
     def get_credential(self, user_email: str) -> Optional[Credentials]:
         """Get credentials from local JSON file."""
